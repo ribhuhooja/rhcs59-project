@@ -25,7 +25,15 @@ speedup.
 So how does this all work?
 
 ## Interaction nets and Interaction combinators
-Interaction nets are a system of 
+Interaction nets are a graph rewriting system invented by 
+Yves Lafont in 1990. The system is represented by a graph
+where vertices are called _agents_ and the edges between them
+are called _wires_. Each agent has a fixed _arity_, n, and 
+an agent of arity n has n+1 _ports_. The extra port is special 
+and is called the _principal port_. Agents only 
+_interact_ through their principal ports.
+
+![interaction-nets](interaction-nets-photo-one.png)
 
 ## Interaction Calculus: Representing this textually
 
