@@ -1,8 +1,5 @@
 # Parallelism for Free? Understanding interaction combinators and the Bend programming language
 
-TODO
-- [] Acknowledgements/sources
-
 Bend is a programming language, developed by HigherOrderCo (HOC), that 
 claims that any code you write that _can_ be parallelized,
 _will_ be parallelized, even if you haven't written it 
@@ -123,7 +120,7 @@ The reduction rules are:
 Of these, VOID, ERASE, COMMUTE, and ANNIHILATE are the interaction combinator 
 rules, OPERATE and SWITCH are for performing low-level computation (instead of 
 dealing with Church numerals), CALL expands a reference into its net, and 
-LINK links up the _wire_ x with the principal port of A. All-in-all, this is 
+LINK links up the _wire_ x with the principal port of A. All-in-all, this is a 
 pretty faithful adaptation of the original rules, with four rules added for 
 computation (but which don't alter semantics) and two rules added for 
 memory-layout reasons (which also don't alter semantics).
@@ -679,4 +676,4 @@ optimizations would also probably help with producing the right kind of parallel
 - Yves Lafont, _Interaction Combinators_
 - Victor Taelin, _HVM2: A Parallel evaluator for interaction combinators_
 - [The Bend github repo](https://github.com/HigherOrderCO/Bend/)
-- ![The HVM github repo](https://github.com/HigherOrderCO/HVM/)
+- [The HVM github repo](https://github.com/HigherOrderCO/HVM/)
