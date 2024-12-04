@@ -622,7 +622,7 @@ that lets you "bring out" the continuation. The next example (from the Bend repo
 functional syntax, because it is somewhat difficult to show the call/cc without it. It 
 is very readable as just LISP:
 
-```lisp
+```py
 # Function that discards its second argument
 Seq a b = a
 
@@ -638,7 +638,24 @@ Main = (CC.lang λcallcc
 )
 ```
 
+```
+@CC.lang = (((((a 0) b) c) d) f)
+  & @Seq ~ (d (e f))
+  & (e a) ~ (b c)
 
+@Seq = (a (* a))
+
+@main = d
+  & @CC.lang ~ (((((42 $([+0x00006C1] a)) a) b) c) d)
+  & $(b c) ~ [+0x000000A]
+```
+
+The explanation behind this is that using a scopeless lambda, we 
+can "expose" the hole variable to the outer computation, and when 
+`(k 42)` is called that binds 42 to the hole which is then added 
+to 10. Most of the complication arises from the need to _implicitly_ 
+pass around hole (because the variable name doesn't bind across definitions)
+and the fact that Bend is affine so you can throw away the garbage.
 
 
 ## Wrapping up: Does Bend do what it promises?
@@ -648,7 +665,13 @@ is not very well optimized, execution can be different (and buggy!)
 based on which interpreter (Rust, C, or CUDA) you use, and it doesn't 
 yet support IO! Still, Bend is the only implementation of the interaction
 combinator idea I could find, and in some hand-picked examples it does have 
-immense speedup over (say) GHC.
+immense speedup over (say) GHC. In some sense, its promise of "what
+_can_ be parallelized, _will_" be parallelized is true because at any 
+stage of the reduction HVM can try to perform all possible current reductions 
+at the same time. However, if the algorithm written is itself sequential, 
+the bytecode will be bottlenecked and no amount of extra threads would be able 
+to speed the graph reductions. Since the project is in its early phases, some static-time 
+optimizations would also probably help with producing the right kind of parallel-reducible bytecode.
 
 ## References
 
