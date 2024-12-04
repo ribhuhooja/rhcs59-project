@@ -80,7 +80,61 @@ each cell is deterministic) and gives the combinators and interpretation as a st
 
 ![interaction-combinator-interpretation](interaction-combinator-interpretation.png)
 
+
 ## HVM bytecode: representing this textually
+This interaction combinator system I described above is more or less 
+what HVM bytecode implements, with some additional fluff thrown in for 
+optimization. The syntax for HVM bytecode is quite simple and looks like this:
+
+```INF
+ <Node> ::=
+     | "*"                    -- (ERA)ser
+     | "@" <alphanumeric>     -- (REF)erence
+     | <Numeric>              -- (NUM)eric
+     | "(" <Tree> <Tree> ")"  -- (CON)structor
+     | "{" <Tree> <Tree> "}"  -- (DUP)licator
+     | "$(" <Tree> <Tree> ")" -- (OPE)rator
+     | "?(" <Tree> <Tree> ")" -- (SWI)tch
+ <Tree> ::=
+     | <alphanumeric>         -- (VAR)iable
+     | <Node>
+ <alphanumeric> ::= [a-zA-Z0-9_.-/]
+```
+
+In these, ERA, CON and DUP are the original interaction combinator 
+nodes and act exactly like they did in that system. NUM, OPE and SWI nodes 
+are for numeric computation and switches, for optimization purposes. A REF 
+represents a function call, and has the purpose of allowing naming of 
+nets. A VAR is a named connection between two auxiliary ports.
+
+Nodes are connected through wirings or principal ports. An active
+(principal-principal) connection is written with a "~". An aux-aux
+connection is _named_ with a variable, and an aux-prin connection is 
+implicit. Redexes (active connections) are separated with an "&".
+
+![hvm-ands](hvm-ands.png)
+
+The tree `@succ = ({(a b) (b R)} (a R))` represents the net:
+
+![church-two](church-two.png)
+
+The reduction rules are:
+
+![redex](redex.png)
+
+Of these, VOID, ERASE, COMMUTE, and ANNIHILATE are the interaction combinator 
+rules, OPERATE and SWITCH are for performing low-level computation (instead of 
+dealing with Church numerals), CALL expands a reference into its net, and 
+LINK links up the _wire_ x with the principal port of A. All-in-all, this is 
+pretty faithful adaptation of the original rules, with four rules added for 
+computation (but which don't alter semantics) and two rules added for 
+memory-layout reasons (which also don't alter semantics).
+
+The basic HVM algorithm is to have a pool of active nodes, which are 
+then reduced one-at-a-time by threads. There are some issues with wire-reductions
+in the LINK step, but other than that the whole system follows strong confluence and 
+can be sped-up using parallelization.
+
 
 ## Bend syntax and features
 Now that we understand how the underlying system works, it's time to 
@@ -255,4 +309,4 @@ yet support IO! Still, Bend is the only implementation of the interaction
 combinator idea I could find, and in some hand-picked examples it does have 
 immense speedup over (say) GHC.
 
-- [] Include benchmarks
+## References
