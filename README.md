@@ -325,15 +325,321 @@ through the OP rule this becomes
   & (2 a)
 ```
 
-which then reduces to `@main = 2` through the LINK rule. 
+which then reduces to `@main = 2` through the LINK rule. Now let's have 
+a look at how functions are compiled:
+
+
+```py 
+def main():
+  return add(3, 5)
+
+def add(x,y):
+  return x+y
+
+
+```
+
+```
+@add = ($([+] $(a b)) (a b))
+
+@main = a
+  & @add ~ (3 (5 a))
+
+```
+
+This exposes the structure of HVM bytecode files more. In general,
+a Bytecode file is in the form of a _book_, with a bunch of top-level 
+REF definitions ending in main. We also see function-calling. The cool 
+thing about function calling in interaction nets is that it's simply 
+connecting the argument to the principal port of the function net! This 
+also preserves the lambda-calculus-like currying nature of functions, because 
+every function is in truth unary and produces further curried functions.
+
+The ref definitions are most often 
+functions, but as we will see they can be other things too. Let's compile 
+the following fragment, which also appeared in the syntax section.
+
+```py 
+
+# With a tuple
+def tuple_fst(x):
+  # This destructures the tuple into the two values it holds.
+  # '*' means that the value is discarded and not bound to any variable.
+  (fst, *) = x
+  return fst
+
+# With an object (similar to what other languages call a struct, a class or a record)
+object Pair { fst, snd }
+
+def Pair/fst(x):
+  match x:
+    case Pair:
+      return x.fst
+
+# We can also access the fields of an object after we `open` it.
+def Pair/fst_2(x):
+  open Pair: x
+  return x.fst
+
+# This is how we can create new objects.
+def Pair/with_one(x):
+  return Pair{ fst: x, snd: 1 }
+
+# The function can be named anything, but by convention we use Type/function_name.
+def Pair/swap(x):
+  open Pair: x
+  # We can also call the constructor like any normal function.
+  return Pair(x.snd, x.fst)
+
+type MyTree:
+  Node { val, ~left, ~right }
+  Leaf
+
+def main():
+  return MyTree/Node (0, MyTree/Leaf(1), MyTree/Leaf(2))
+
+```
+
+```
+@MyTree/Leaf = ((@MyTree/Leaf/tag a) a)
+
+@MyTree/Leaf/tag = 1
+
+@MyTree/Node = (a (b (c ((@MyTree/Node/tag (a (b (c d)))) d))))
+
+@MyTree/Node/tag = 0
+
+@Pair = (a (b ((@Pair/tag (a (b c))) c)))
+
+@Pair/fst = ((@Pair/fst__C0 a) a)
+
+@Pair/fst_2 = ((@Pair/fst_2__C0 a) a)
+
+@Pair/fst_2__C0 = (?(((a (* a)) *) b) b)
+
+@Pair/fst__C0 = (?(((a (* a)) *) b) b)
+
+@Pair/swap = ((@Pair/swap__C1 a) a)
+
+@Pair/swap__C0 = (b (a c))
+  & @Pair ~ (a (b c))
+
+@Pair/swap__C1 = (?((@Pair/swap__C0 *) a) a)
+
+@Pair/tag = 0
+
+@Pair/with_one = (a b)
+  & @Pair ~ (a (1 b))
+
+@main = c
+  & @MyTree/Node ~ (0 (a (b c)))
+  & @MyTree/Leaf ~ (1 a)
+  & @MyTree/Leaf ~ (2 b)
+
+@tuple_fst = ((a *) a)
+
+```
+
+We now have some more REF tags, mostly to refer to inner members of 
+structs of different variants of structs. One interesting feature to note 
+is the `fun__C0` pattern - it refers to the first member of an `open`ed 
+struct and erases the other member of the struct to preserve 
+affine-ness.
+
+Let's look at how the `fork` and `bend` keywords are compiled:
+
+```py 
+def MyTree.sum(x):
+  # Sum all the values in the tree.
+  fold x:
+    # The fold is implicitly called for fields marked with '~' in their definition.
+    case MyTree/Node:
+      return x.val + x.left + x.right
+    case MyTree/Leaf:
+      return 0
+
+def main:
+  bend val = 0:
+    when val < 10:
+      # 'fork' calls the bend recursively with the provided values.
+      x = MyTree/Node { val:val, left:fork(val + 1), right:fork(val + 1) }
+    else:
+      # 'else' is the base case, when the condition fails.
+      x = MyTree/Leaf
+
+  return MyTree.sum(x)
+```
+
+```
+@MyTree.sum = (a b)
+  & @MyTree.sum__fold0 ~ (a b)
+
+@MyTree.sum__fold0 = ((@MyTree.sum__fold0__C1 a) a)
+
+@MyTree.sum__fold0__C0 = ($([+] $(b $([+] $(d e)))) (a (c e)))
+  &!@MyTree.sum__fold0 ~ (a b)
+  &!@MyTree.sum__fold0 ~ (c d)
+
+@MyTree.sum__fold0__C1 = (?((@MyTree.sum__fold0__C0 (* 0)) a) a)
+
+@MyTree/Leaf = ((@MyTree/Leaf/tag a) a)
+
+@MyTree/Leaf/tag = 1
+
+@MyTree/Node = (a (b (c ((@MyTree/Node/tag (a (b (c d)))) d))))
+
+@MyTree/Node/tag = 0
+
+@main = b
+  & @MyTree.sum ~ (a b)
+  & @main__bend0 ~ (0 a)
+
+@main__bend0 = ({$([>0x000000A] ?(((* @MyTree/Leaf) @main__bend0__C0) (a b))) a} b)
+
+@main__bend0__C0 = (* ({a {$([+0x0000001] b) $([+0x0000001] d)}} f))
+  & @MyTree/Node ~ (a (c (e f)))
+  &!@main__bend0 ~ (b c)
+  &!@main__bend0 ~ (d e)
+
+```
+
+They are actually just inline functions that do the recursive folding/bending.
+
+Now that we've looked at how the basic bend constructs are compiled, let's end this section by 
+looking at lambdas. Bend has two varieties of lambdas, scoped and scopeless. Scoped lambdas behave 
+exactly as normal lambdas do (with some subtleties about lazy evaluation; the HVM has a lazy and a strict 
+evaluation mode).
+
+```py 
+def main():
+  return add(2,3)
+
+def add():
+  return lambda x, y: x+y
+
+```
+
+```
+@add = ($([+] $(a b)) (a b))
+
+@main = a
+  & @add ~ (2 (3 a))
+
+```
+
+This compiles to exactly the same structure as a normal def. Indeed, in 
+Bend _all_ defs are just sugar for lambdas. It also does automatic currying/
+uncurrying:
+
+```py 
+def main():
+  return add(2,3)
+
+def add(x):
+  return lambda y: x+y
+
+```
+```
+@add = ($([+] $(a b)) (a b))
+
+@main = a
+  & @add ~ (2 (3 a))
+```
+
+Unnamed lambdas get compiled as such:
+
+```py 
+def main():
+  return (lambda x, y: x+y)(2,3)
+
+```
+```
+@main = c
+  & ($([+] $(a b)) (a b)) ~ (2 (3 c))
+
+```
+
+In general, lambdas are treated exactly like functions, and get compiled as such. 
+Named functions are still more powerful, though, because you can explicitly 
+recurse:
+
+```py 
+def fac(n):
+  if n > 1:
+    return n*fac(n - 1)
+  else:
+    return 1
+
+def main():
+  return fac(5)
+```
+
+```
+@fac = ({$([<0x0000001] ?(((* 1) @fac__C0) (a b))) a} b)
+
+@fac__C0 = (* ({$([*] $(b c)) $([:-0x0000001] a)} c))
+  & @fac ~ (a b)
+
+@main = a
+  & @fac ~ (5 a)
+```
+There are interesting memory implications to recursion, because 
+each time a function is called the entire function net is copied and 
+inlined. Finally, let's look at scopeless lambdas. To make a variable 
+"scopeless", we just prefix "$" to its name. We can now use it outside 
+the lambda it was defined in! The variable isn't truly scopeless because 
+it only lasts within a single def (internally, REF) block.
+
+```py
+def scopeless():
+  return (lambda $x: 1)(2) + $x
+
+def scoped():
+  return (lambda x: 1)(2) + 2
+
+```
+```
+@scoped = a
+  & (* 1) ~ (2 $([+0x0000002] a))
+
+@scopeless = b
+  & (a 1) ~ (2 $([+] $(a b)))
+
+```
+
+The "scopeless" variable is just the wire "a", which now detaches from 
+the net that represents the lambda and fits into the outside computation. In 
+this sense, scopeless variables are very easy to represent internally in HVM. Another 
+interesting thing to notice is the destructor waiting for the unused variable in the 
+scoped version. 
+
+There is something else interesting in the scopeless bytecode: The lambda term is 
+just `(a 1)`, and the rest of the net is just... waiting for the result of the lambda.
+It is a reified version of the "computation that will be done to the result of the lambda":
+a continuation! Continuations aren't difficult to represent using interaction nets, because 
+_every_ computation is reified into a net. Turns out, scopeless lambdas are exactly the tool 
+that lets you "bring out" the continuation. The next example (from the Bend repo) uses Bend's 
+functional syntax, because it is somewhat difficult to show the call/cc without it. It 
+is very readable as just LISP:
+
+```lisp
+# Function that discards its second argument
+Seq a b = a
+
+# Create a program capable of using `callcc`
+CC.lang = λprogram
+  let callcc  = λcallback (λ$garbage($hole) (callback λ$hole(0)));
+  let result  = (program callcc);
+  (Seq result $garbage)
+
+Main = (CC.lang λcallcc 
+  # This code calls `callcc`, then calls `k` to fill the hole with `42`. This means that the call to callcc returns `42`, and the program returns `52`. (+ (k 42) 1729) is garbage and is erased.
+  (+ 10 (callcc λk(+ (k 42) 1729)))
+)
+```
 
 
 
-- [] How are some basic programs compiled
-- [] Compilation of, say, fork and bend
-- [] How are lambdas compiled? How are scopeless lambdas compiled?
-- [] Open and Erasers
-- [] Dups and sups
 
 ## Wrapping up: Does Bend do what it promises?
 
