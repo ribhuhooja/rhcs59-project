@@ -1,7 +1,6 @@
 # Parallelism for Free? Understanding interaction combinators and the Bend programming language
 
 TODO
-- [] Split
 - [] Acknowledgements/sources
 - [] Rewrite the bend portions after understanding ICs
 - [] Lessons for the future?
@@ -31,11 +30,57 @@ where vertices are called _agents_ and the edges between them
 are called _wires_. Each agent has a fixed _arity_, n, and 
 an agent of arity n has n+1 _ports_. The extra port is special 
 and is called the _principal port_. Agents only 
-_interact_ through their principal ports.
+_interact_ through their principal ports. All the other ports are 
+called _auxiliary ports_
 
 ![interaction-nets](interaction-nets-photo-one.png)
 
-## Interaction Calculus: Representing this textually
+This system is just a base, and on top of this you can add 
+_rewrite rules_ that determine how interacting pairs reduce.
+An important restriction on any reduction rules that must be followed
+by any system is that for each reduction rule
+any _variable_ must occur exactly once  on each side of the rule.
+We can still duplicate and erase data, but it needs to be done
+explicitly. In the HVM implementation, the eraser node _is_ the 
+garbage collector and _no separate garbage collection is needed!_
+
+![explicit-erase-dup](explicit-erase-dup.png)
+
+These conditions are already enough to give us the property that makes these things
+useful: strong confluence. If a net A reduces to B and B' in one step, then both 
+B and B' reduce to a common C in one step. Because agents only interact through 
+their principal ports, and each agent only has one, two rules cannot interfere with 
+each other. This implies that the _order_ of reductions doesn't matter and interactions 
+can be performed concurrently. In particular, _if_ a given net X reduces to an irreducible 
+net Y after n reductions, then any order of doing those n reductions will give you the net 
+Y (of course, this only applies if the reductions terminate. Proving that reductions
+will terminate to an irreducible net, given a starting net, is of course impossible).
+This is what gives this system all its power!
+
+Till now, I have just described the graph-rewriting system of interaction nets. A 
+specific implementation of them needs to supply its own reduction rules. Interaction 
+combinators are one such implementation. The interaction combinator
+system is a Turing-complete model of computation with only three symbols and 
+six interaction rules.
+
+![interaction-rules](interaction-combinator-rules.png)
+
+The paper introducing interaction combinators goes into depth proving the 
+universality of this system of rules. The gist of the argument is that they 
+construct a way to express any interaction _net_ as a net of _combinators_ by 
+using a sophisticated translation scheme. This still leaves us with only these 
+abstract rules, without an interpretation for them. The simple interpretation of 
+the combinators is that epsilon is the eraser, delta is the duplicator, and 
+gamma is some form of "binary construction." Another interpretation is to 
+consider the reduced net, which in the general case is just a permutation of 
+wires, and send a "package" through the wires and see which wire it ends up at. 
+Turns out, this can be computed even without reducing the nets (because the effect of 
+each cell is deterministic) and gives the combinators and interpretation as a stack machine.
+
+
+![interaction-combinator-interpretation](interaction-combinator-interpretation.png)
+
+## HVM bytecode: representing this textually
 
 ## Bend syntax and features
 Now that we understand how the underlying system works, it's time to 
