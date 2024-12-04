@@ -2,8 +2,6 @@
 
 TODO
 - [] Acknowledgements/sources
-- [] Rewrite the bend portions after understanding ICs
-- [] Lessons for the future?
 
 Bend is a programming language, developed by HigherOrderCo (HOC), that 
 claims that any code you write that _can_ be parallelized,
@@ -114,7 +112,7 @@ implicit. Redexes (active connections) are separated with an "&".
 
 ![hvm-ands](hvm-ands.png)
 
-The tree `@succ = ({(a b) (b R)} (a R))` represents the net:
+The tree `({(a b) (b R)} (a R))` represents the net:
 
 ![church-two](church-two.png)
 
@@ -293,6 +291,43 @@ leaking is really interesting.
 
 
 ## Bend under the hood 
+Let's look at the transformation of Bend structures to HVM code. Starting off, we have 
+
+```py 
+def main():
+  return 5
+```
+ ```
+@main = 5
+```
+
+This introduces us to the basic structure of an HVM program. 
+Each program must have one `@main` ref node, and the value of 
+that node, once reduced, is the output of the program.
+
+```py 
+def main():
+  return 1+2
+```
+
+```
+@main = a
+  & $(2 a) ~ [+0x0000001]
+```
+
+Okay, this is a little more complicated. The [+0x000001] is the 
+add-one operator, which is connected through a principal port to 
+an operator block that holds a 2, and a wire to main. Upon reduction
+through the OP rule this becomes
+
+```
+@main = a 
+  & (2 a)
+```
+
+which then reduces to `@main = 2` through the LINK rule. 
+
+
 
 - [] How are some basic programs compiled
 - [] Compilation of, say, fork and bend
@@ -310,3 +345,9 @@ combinator idea I could find, and in some hand-picked examples it does have
 immense speedup over (say) GHC.
 
 ## References
+
+- Yves Lafont, _Interaction nets_
+- Yves Lafont, _Interaction Combinators_
+- Victor Taelin, _HVM2: A Parallel evaluator for interaction combinators_
+- [The Bend github repo](https://github.com/HigherOrderCO/Bend/)
+- ![The HVM github repo](https://github.com/HigherOrderCO/HVM/)
